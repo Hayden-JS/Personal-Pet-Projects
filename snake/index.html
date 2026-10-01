@@ -163,16 +163,16 @@ function turn(q,cur,a,b){
 function tick(){
   if(q1.length) d1=q1.shift();
   if(mode===2&&q2.length) d2=q2.shift();
-  const h1=[s1[0][0]+d1[0],s1[0][1]+d1[1]];
-  const h2=mode===2?[s2[0][0]+d2[0],s2[0][1]+d2[1]]:null;
+  const wrap=(p,d)=>[(p[0]+d[0]+W)%W,(p[1]+d[1]+H)%H]; // walls wrap to the opposite side
+  const h1=wrap(s1[0],d1);
+  const h2=mode===2?wrap(s2[0],d2):null;
   const eat1=food&&same(h1,food), eat2=h2&&food&&same(h2,food);
   // bodies as they will be after this move (a tail that moves away is not an obstacle)
   const b1=eat1?s1:s1.slice(0,-1), b2=mode===2?(eat2?s2:s2.slice(0,-1)):[];
-  const wall=h=>h[0]<0||h[0]>=W||h[1]<0||h[1]>=H;
-  let dead1=wall(h1)||b1.some(p=>same(p,h1))||b2.some(p=>same(p,h1));
+  let dead1=b1.some(p=>same(p,h1))||b2.some(p=>same(p,h1));
   let dead2=false;
   if(mode===2){
-    dead2=wall(h2)||b2.some(p=>same(p,h2))||b1.some(p=>same(p,h2));
+    dead2=b2.some(p=>same(p,h2))||b1.some(p=>same(p,h2));
     if(same(h1,h2)||(same(h1,s2[0])&&same(h2,s1[0]))){dead1=dead2=true;}
   }
   if(dead1||dead2){
@@ -204,6 +204,7 @@ function drawSnake(s,body,head,eye){
   x.fillStyle=body;
   for(let i=0;i<s.length-1;i++){
     const a=s[i],b=s[i+1];
+    if(Math.abs(a[0]-b[0])+Math.abs(a[1]-b[1])!==1) continue; // skip the join across a wrap edge
     if(a[0]===b[0]) x.fillRect(a[0]*C+2,Math.min(a[1],b[1])*C+6,4,4);
     else x.fillRect(Math.min(a[0],b[0])*C+6,a[1]*C+2,4,4);
   }
