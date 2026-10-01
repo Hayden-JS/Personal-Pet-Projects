@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Snake CRT</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a single arcade cabinet column — HUD strip, phosphor screen in a plastic bezel, control deck below. One committed dark look. */
+:root{
+  --room:#0c0d0b;        /* the dark room the cabinet sits in */
+  --bezel:#262822;       /* moulded plastic surround */
+  --bezel-hi:#3a3d34;
+  --glass:#031203;       /* unlit phosphor */
+  --p1:#8dff8d;          /* P1 phosphor green */
+  --p2:#ffb84d;          /* P2 amber */
+  --food:#ff6a5c;        /* apple */
+  --ink:#b9d8b0;         /* body text on the room */
+  --dim:#6f8a69;
+  --display:"VT323", "Courier New", monospace;
+  --body:"IBM Plex Mono", ui-monospace, "Courier New", monospace;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--room);color:var(--ink);font-family:var(--body);font-size:13px;padding-inline:16px;padding-block:20px;box-sizing:border-box}
+.cab{max-width:680px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+header{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}
+h1{font-family:var(--display);font-weight:400;font-size:52px;line-height:.8;margin:0;color:var(--p1);letter-spacing:.06em;text-shadow:0 0 12px rgba(141,255,141,.45)}
+h1 small{display:block;font-size:18px;color:var(--dim);letter-spacing:.2em;text-shadow:none;margin-top:6px}
+.modes{display:flex;gap:6px}
+.modes button,.deck button{font-family:var(--display);font-size:20px;letter-spacing:.08em;background:transparent;color:var(--p1);border:2px solid var(--p1);padding:4px 12px;cursor:pointer;border-radius:3px}
+.modes button[aria-pressed="true"]{background:var(--p1);color:var(--glass)}
+.modes button.two{color:var(--p2);border-color:var(--p2)}
+.modes button.two[aria-pressed="true"]{background:var(--p2);color:var(--glass)}
+button:focus-visible{outline:2px dashed var(--ink);outline-offset:3px}
+.hud{display:flex;justify-content:space-between;gap:10px;font-family:var(--display);font-size:24px;letter-spacing:.1em;font-variant-numeric:tabular-nums;color:var(--p1)}
+.hud span b{font-weight:400;color:var(--dim);margin-right:6px}
+.bezel{background:linear-gradient(160deg,var(--bezel-hi),var(--bezel) 40%);padding:clamp(10px,3vw,22px);border-radius:26px;box-shadow:0 0 0 2px #111 inset,0 24px 60px rgba(0,0,0,.6)}
+.screen{position:relative;border-radius:18px/22px;overflow:hidden;background:var(--glass);box-shadow:0 0 50px rgba(80,255,80,.12)}
+canvas{display:block;width:100%;max-width:100%;aspect-ratio:4/3;image-rendering:pixelated;image-rendering:crisp-edges;touch-action:none}
+.screen::before{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(to bottom,transparent 0 2px,rgba(0,0,0,.28) 2px 3px);z-index:2}
+.screen::after{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,.65) 100%);z-index:2;animation:flick 6s infinite steps(1)}
+@keyframes flick{0%,100%{opacity:1}47%{opacity:.92}48%{opacity:1}}
+@media (prefers-reduced-motion:reduce){.screen::after{animation:none}}
+.msg{position:absolute;inset:0;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;background:rgba(2,10,2,.72);font-family:var(--display);color:var(--p1);text-shadow:0 0 10px rgba(141,255,141,.6);cursor:pointer;padding-inline:16px}
+.msg .big{font-size:clamp(34px,9vw,64px);letter-spacing:.12em;line-height:1}
+.msg .sub{font-size:clamp(18px,4vw,24px);letter-spacing:.1em;color:var(--ink)}
+.msg .blink{animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+@media (prefers-reduced-motion:reduce){.msg .blink{animation:none}}
+.deck{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.pad{display:grid;grid-template-columns:repeat(3,54px);grid-template-rows:repeat(3,54px);gap:4px}
+.pad button{padding:0;font-size:24px;border-radius:8px;background:var(--bezel);border-color:var(--bezel-hi);touch-action:manipulation;user-select:none}
+.pad button:active{background:var(--p1);color:var(--glass)}
+.pad .u{grid-area:1/2}.pad .l{grid-area:2/1}.pad .r{grid-area:2/3}.pad .d{grid-area:3/2}
+.acts{display:flex;flex-direction:column;gap:8px}
+.keys{color:var(--dim);line-height:1.7;margin:0}
+.keys kbd{font-family:var(--body);font-weight:600;color:var(--ink);border:1px solid var(--bezel-hi);border-radius:3px;padding:0 4px}
+.keys .p1{color:var(--p1)}.keys .p2{color:var(--p2)}
+@media (max-width:440px){.hud{font-size:20px}.pad{grid-template-columns:repeat(3,60px);grid-template-rows:repeat(3,60px)}}
+</style>
+</head>
+<body>
+
+<div class="cab">
+  <header>
+    <h1>SNAKE<small>CRT EDITION · v2.1</small></h1>
+    <div class="modes" role="group" aria-label="Players">
+      <button id="m1" aria-pressed="true">1P SOLO</button>
+      <button id="m2" class="two" aria-pressed="false">2P CO-OP</button>
+    </div>
+  </header>
+
+  <div class="hud" aria-live="polite">
+    <span><b>SCORE</b><span id="score">000</span></span>
+    <span><b>HI</b><span id="hi">000</span></span>
+    <span><b>LV</b><span id="lv">01</span></span>
+  </div>
+
+  <div class="bezel">
+    <div class="screen">
+      <canvas id="c" width="160" height="120" aria-label="Snake playfield"></canvas>
+      <div class="msg" id="msg">
+        <div class="big" id="msgBig">SNAKE</div>
+        <div class="sub blink" id="msgSub">PRESS SPACE OR TAP TO START</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="deck">
+    <div class="pad" aria-label="Direction pad (Player 1)">
+      <button class="u" data-d="0,-1" aria-label="Up">▲</button>
+      <button class="l" data-d="-1,0" aria-label="Left">◀</button>
+      <button class="r" data-d="1,0" aria-label="Right">▶</button>
+      <button class="d" data-d="0,1" aria-label="Down">▼</button>
+    </div>
+    <p class="keys">
+      <span class="p1">P1</span> <kbd>←↑↓→</kbd> <span id="p1alt">or <kbd>WASD</kbd></span><br>
+      <span class="p2" id="p2line" hidden>P2 <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><br></span>
+      <kbd>SPACE</kbd> start / pause · <kbd>R</kbd> restart<br>
+      Swipe the screen on a phone.
+    </p>
+    <div class="acts">
+      <button id="bPause">PAUSE</button>
+      <button id="bReset">RESTART</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(()=>{
+const cv=document.getElementById('c'), x=cv.getContext('2d');
+x.imageSmoothingEnabled=false;
+const W=20,H=15,C=8;
+const $=id=>document.getElementById(id);
+const store={get(k){try{return +localStorage.getItem(k)||0}catch(e){return 0}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
+
+let mode=1, s1, s2, d1, d2, q1, q2, food, score, state='ready', acc=0, last=0, crashMsg='';
+let hi=store.get('snakeHi1');
+
+/* ---- sound: one shared context, square-wave chirps ---- */
+let ac=null;
+function audio(){ if(!ac){ try{ac=new (window.AudioContext||window.webkitAudioContext)()}catch(e){} } if(ac&&ac.state==='suspended')ac.resume(); }
+function beep(f,t,type='square',vol=.07){ if(!ac)return; try{const o=ac.createOscillator(),g=ac.createGain();o.type=type;o.frequency.value=f;o.connect(g);g.connect(ac.destination);g.gain.setValueAtTime(vol,ac.currentTime);g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+t);o.start();o.stop(ac.currentTime+t)}catch(e){} }
+
+const level=()=>1+Math.floor(score/50);
+const interval=()=>Math.max(55,135-(level()-1)*12);
+const same=(a,b)=>a[0]===b[0]&&a[1]===b[1];
+const pad=n=>String(n).padStart(3,'0');
+
+function spawn(){
+  const occ=[...s1,...(mode===2?s2:[])];
+  const free=[];
+  for(let i=0;i<W;i++)for(let j=0;j<H;j++) if(!occ.some(p=>p[0]===i&&p[1]===j)) free.push([i,j]);
+  return free.length?free[Math.random()*free.length|0]:null;
+}
+function reset(){
+  if(mode===1){ s1=[[10,7],[9,7],[8,7]]; }
+  else { s1=[[12,5],[11,5],[10,5]]; }
+  s2=[[7,9],[6,9],[5,9]];
+  d1=[1,0]; d2=[1,0]; q1=[]; q2=[];
+  score=0; crashMsg=''; food=spawn(); acc=0;
+  hi=store.get('snakeHi'+mode);
+  hud(); draw();
+}
+function setMode(m){
+  mode=m;
+  $('m1').setAttribute('aria-pressed',m===1); $('m2').setAttribute('aria-pressed',m===2);
+  $('p2line').hidden=m!==2; $('p1alt').hidden=m===2;
+  reset(); show('ready');
+}
+
+/* queue up to two turns per snake so quick taps register, and never allow a 180° reversal */
+function turn(q,cur,a,b){
+  const ref=q.length?q[q.length-1]:cur;
+  if(ref[0]+a===0&&ref[1]+b===0) return;
+  if(ref[0]===a&&ref[1]===b) return;
+  if(q.length<2) q.push([a,b]);
+}
+
+function tick(){
+  if(q1.length) d1=q1.shift();
+  if(mode===2&&q2.length) d2=q2.shift();
+  const h1=[s1[0][0]+d1[0],s1[0][1]+d1[1]];
+  const h2=mode===2?[s2[0][0]+d2[0],s2[0][1]+d2[1]]:null;
+  const eat1=food&&same(h1,food), eat2=h2&&food&&same(h2,food);
+  // bodies as they will be after this move (a tail that moves away is not an obstacle)
+  const b1=eat1?s1:s1.slice(0,-1), b2=mode===2?(eat2?s2:s2.slice(0,-1)):[];
+  const wall=h=>h[0]<0||h[0]>=W||h[1]<0||h[1]>=H;
+  let dead1=wall(h1)||b1.some(p=>same(p,h1))||b2.some(p=>same(p,h1));
+  let dead2=false;
+  if(mode===2){
+    dead2=wall(h2)||b2.some(p=>same(p,h2))||b1.some(p=>same(p,h2));
+    if(same(h1,h2)||(same(h1,s2[0])&&same(h2,s1[0]))){dead1=dead2=true;}
+  }
+  if(dead1||dead2){
+    crashMsg = mode===1 ? 'CRASHED' : (dead1&&dead2?'HEAD-ON!':(dead1?'GREEN CRASHED':'AMBER CRASHED'));
+    if(score>hi){hi=score; store.set('snakeHi'+mode,hi);}
+    beep(110,.25); setTimeout(()=>beep(70,.5),120);
+    hud(); draw(); show('over'); return;
+  }
+  s1.unshift(h1); if(!eat1) s1.pop();
+  if(mode===2){ s2.unshift(h2); if(!eat2) s2.pop(); }
+  if(eat1||eat2){
+    const lvBefore=level();
+    score+=10; food=spawn();
+    beep(eat2&&!eat1?660:880,.08); setTimeout(()=>beep(eat2&&!eat1?990:1320,.08),70);
+    if(level()>lvBefore) setTimeout(()=>{beep(523,.08);setTimeout(()=>beep(784,.12),90)},180);
+    if(!food){ crashMsg='BOARD CLEARED'; if(score>hi){hi=score;store.set('snakeHi'+mode,hi)} hud(); draw(); show('over'); return; }
+  }
+  hud(); draw();
+}
+
+function hud(){
+  $('score').textContent=pad(score); $('hi').textContent=pad(Math.max(hi,score));
+  $('lv').textContent=String(level()).padStart(2,'0');
+}
+
+function drawSnake(s,body,head,eye){
+  s.forEach((p,i)=>{ x.fillStyle=i===0?head:body; x.fillRect(p[0]*C+1,p[1]*C+1,6,6); });
+  // link segments so the snake reads as one body
+  x.fillStyle=body;
+  for(let i=0;i<s.length-1;i++){
+    const a=s[i],b=s[i+1];
+    if(a[0]===b[0]) x.fillRect(a[0]*C+2,Math.min(a[1],b[1])*C+6,4,4);
+    else x.fillRect(Math.min(a[0],b[0])*C+6,a[1]*C+2,4,4);
+  }
+  x.fillStyle=eye; x.fillRect(s[0][0]*C+3,s[0][1]*C+3,2,2);
+}
+function draw(){
+  x.fillStyle="#031203"; x.fillRect(0,0,160,120);
+  x.fillStyle="#072007";
+  for(let i=0;i<W;i++)for(let j=0;j<H;j++) if((i+j)%2===0) x.fillRect(i*C,j*C,C,C);
+  if(food){
+    const fx=food[0]*C, fy=food[1]*C;
+    x.fillStyle="#ff6a5c"; x.fillRect(fx+1,fy+2,6,5); x.fillRect(fx+2,fy+1,4,7);
+    x.fillStyle="#8dff8d"; x.fillRect(fx+4,fy,2,2);
+    x.fillStyle="#ffc4bd"; x.fillRect(fx+2,fy+3,1,1);
+  }
+  drawSnake(s1,"#8dff8d","#e4ffe4","#031203");
+  if(mode===2) drawSnake(s2,"#ffb84d","#ffe9c2","#031203");
+}
+
+/* ---- screen states ---- */
+function show(st){
+  state=st;
+  const m=$('msg'), big=$('msgBig'), sub=$('msgSub');
+  $('bPause').textContent = st==='pause'?'RESUME':'PAUSE';
+  if(st==='play'){ m.hidden=true; return; }
+  m.hidden=false; sub.classList.toggle('blink',st!=='pause');
+  if(st==='ready'){ big.textContent=mode===1?'1P SOLO':'2P CO-OP'; sub.textContent=mode===1?'PRESS SPACE OR TAP TO START':'SHARE ONE SCORE · DON’T COLLIDE'; }
+  if(st==='pause'){ big.textContent='PAUSED'; sub.textContent='SPACE OR TAP TO RESUME'; }
+  if(st==='over'){ big.textContent=crashMsg==='BOARD CLEARED'?'YOU WIN':'GAME OVER'; sub.textContent=`${crashMsg} · ${pad(score)} PTS · R OR TAP`; }
+}
+function start(){ audio(); if(state==='over') reset(); last=performance.now(); acc=0; show('play'); }
+function togglePause(){ if(state==='play') show('pause'); else start(); }
+function restart(){ audio(); reset(); last=performance.now(); show('play'); }
+
+function loop(t){
+  if(state==='play'){
+    acc+=Math.min(t-last,250);
+    const iv=interval();
+    while(acc>=iv&&state==='play'){ acc-=iv; tick(); }
+  }
+  last=t; requestAnimationFrame(loop);
+}
+
+/* ---- input ---- */
+const P1={ArrowUp:[0,-1],ArrowDown:[0,1],ArrowLeft:[-1,0],ArrowRight:[1,0]};
+const WASD={w:[0,-1],s:[0,1],a:[-1,0],d:[1,0]};
+document.addEventListener('keydown',e=>{
+  const k=e.key, kl=k.length===1?k.toLowerCase():k;
+  if(k===' '||k.startsWith('Arrow')) e.preventDefault();
+  if(k===' '){ togglePause(); return; }
+  if(kl==='r'){ restart(); return; }
+  let dir=P1[k], who=1;
+  if(!dir&&WASD[kl]){ dir=WASD[kl]; who=mode===2?2:1; }
+  if(!dir) return;
+  if(state==='ready'||state==='over') start();
+  if(state!=='play') return;
+  who===1?turn(q1,d1,...dir):turn(q2,d2,...dir);
+});
+document.querySelectorAll('.pad button').forEach(b=>{
+  b.addEventListener('pointerdown',e=>{
+    e.preventDefault();
+    const [a,c]=b.dataset.d.split(',').map(Number);
+    if(state==='ready'||state==='over') start();
+    if(state==='play') turn(q1,d1,a,c);
+  });
+});
+$('msg').addEventListener('click',()=>{ state==='over'?restart():start(); });
+$('bPause').addEventListener('click',togglePause);
+$('bReset').addEventListener('click',restart);
+$('m1').addEventListener('click',()=>setMode(1));
+$('m2').addEventListener('click',()=>setMode(2));
+let sx=0,sy=0;
+cv.addEventListener('touchstart',e=>{const t=e.changedTouches[0];sx=t.clientX;sy=t.clientY},{passive:true});
+cv.addEventListener('touchend',e=>{
+  const t=e.changedTouches[0], dx=t.clientX-sx, dy=t.clientY-sy;
+  if(Math.max(Math.abs(dx),Math.abs(dy))<20){ togglePause(); return; }
+  if(state!=='play') start();
+  Math.abs(dx)>Math.abs(dy)?turn(q1,d1,Math.sign(dx),0):turn(q1,d1,0,Math.sign(dy));
+},{passive:true});
+document.addEventListener('visibilitychange',()=>{ if(document.hidden&&state==='play') show('pause'); });
+
+reset(); show('ready'); requestAnimationFrame(t=>{last=t;loop(t)});
+})();
+</script>
+</body>
+</html>
